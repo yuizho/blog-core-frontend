@@ -1,4 +1,4 @@
-# blog-client
+# blog-core-frontend
 
 this is the blog client for [blog_core server](https://github.com/yuizho/blog-core).
 
