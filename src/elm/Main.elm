@@ -34,13 +34,30 @@ main =
 
 type alias Model =
     { key : Nav.Key
+    , session : Session
     , page : Page
+    }
+
+
+type alias Credential =
+    { username : String
+    , password : String
+    }
+
+
+type Session
+    = Loggedin String
+    | Guest (Maybe Credential)
+
+
+type alias LoginData =
+    { token : String
     }
 
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url key =
-    routeUrl url <| Model key <| ArticleListPage (ArticleList.Model [])
+    routeUrl url <| Model key (Guest Nothing) <| ArticleListPage (ArticleList.Model [])
 
 
 type Page
@@ -104,7 +121,11 @@ stepArticle model ( article, cmds ) =
 
 
 type Msg
-    = GoArticleList ArticleList.Msg
+    = ChangeUserName String
+    | ChangePassword String
+    | Login
+    | UpdateSession (Result Http.Error LoginData)
+    | GoArticleList ArticleList.Msg
     | GoArticle Article.Msg
     | LinkClicked Browser.UrlRequest
     | UrlChanged Url.Url
@@ -113,6 +134,67 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        ChangeUserName value ->
+            case model.session of
+                Guest maybeCred ->
+                    case maybeCred of
+                        Just cred ->
+                            ( { model | session = Guest <| Just { cred | username = value } }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            ( { model | session = Guest <| Just (Credential value "") }
+                            , Cmd.none
+                            )
+
+                Loggedin _ ->
+                    ( model, Cmd.none )
+
+        ChangePassword value ->
+            case model.session of
+                Guest maybeCred ->
+                    case maybeCred of
+                        Just cred ->
+                            ( { model | session = Guest <| Just { cred | password = value } }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            ( { model | session = Guest <| Just (Credential "" value) }
+                            , Cmd.none
+                            )
+
+                Loggedin _ ->
+                    ( model, Cmd.none )
+
+        Login ->
+            case model.session of
+                Guest maybeCred ->
+                    case maybeCred of
+                        Just cred ->
+                            ( model
+                            , postLogin cred
+                            )
+
+                        Nothing ->
+                            ( model, Cmd.none )
+
+                Loggedin _ ->
+                    ( model, Cmd.none )
+
+        UpdateSession result ->
+            case result of
+                Ok login ->
+                    ( { model | session = Loggedin login.token }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( model
+                    , Cmd.none
+                    )
+
         GoArticleList subMsg ->
             case model.page of
                 ArticleListPage article ->
@@ -162,12 +244,28 @@ view model =
     in
     -- decide view with Model Type
     -- refer: https://github.com/rtfeldman/elm-spa-example/blob/ad14ff6f8e50789ba59d8d2b17929f0737fc8373/src/Main.elm#L62
-    case model.page of
-        ArticleListPage subModel ->
-            baseHtml title <| ArticleList.view subModel
+    case model.session of
+        Guest _ ->
+            baseHtml title <|
+                div []
+                    [ div [ class "siimple-field" ]
+                        [ div [] [ text "user name" ]
+                        , input [ class "siimple-input", onInput ChangeUserName ] []
+                        ]
+                    , div [ class "siimple-field" ]
+                        [ div [] [ text "password" ]
+                        , input [ class "siimple-input", type_ "password", onInput ChangePassword ] []
+                        ]
+                    , div [ class "siimple-field" ] [ button [ class "siimple-btn", onClick Login ] [ text "login" ] ]
+                    ]
 
-        ArticlePage subModel ->
-            baseHtml title <| Article.view subModel
+        Loggedin token ->
+            case model.page of
+                ArticleListPage subModel ->
+                    baseHtml title <| ArticleList.view subModel
+
+                ArticlePage subModel ->
+                    baseHtml title <| Article.view subModel
 
 
 baseHtml title content =
@@ -196,3 +294,43 @@ baseView title container =
         ]
         [ text "© 2019 Yui Ito" ]
     ]
+
+
+
+-- HTPP
+
+
+postLogin : Credential -> Cmd Msg
+postLogin cred =
+    let
+        body =
+            "id=" ++ cred.username ++ "&password=" ++ cred.password
+    in
+    Http.send UpdateSession (post loginUrl body)
+
+
+post : String -> String -> Http.Request LoginData
+post url body =
+    Http.request
+        { method = "POST"
+        , headers =
+            [ Http.header "X-Requested-With" "XMLHttpRequest" ]
+        , url = url
+        , body = Http.stringBody "application/x-www-form-urlencoded" body
+        , expect = Http.expectJson loginDecorder
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
+
+loginUrl : String
+loginUrl =
+    UrlBuilder.crossOrigin "http://localhost:8080"
+        [ "api", "user", "login" ]
+        []
+
+
+loginDecorder : Decode.Decoder LoginData
+loginDecorder =
+    Decode.map LoginData
+        (Decode.field "token" Decode.string)
