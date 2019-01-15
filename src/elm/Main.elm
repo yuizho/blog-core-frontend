@@ -315,7 +315,7 @@ view model =
                     baseHtml model title <| ArticleList.view subModel
 
                 ArticlePage subModel ->
-                    baseHtml model title <| Article.view subModel
+                    baseHtml model title (Html.map (\subMsg -> GoArticle subMsg) <| Article.view subModel)
 
 
 baseHtml model title content =

@@ -41,6 +41,7 @@ init id =
 
 type Msg
     = ShowContent (Result Http.Error Model)
+    | ChangeContent String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -59,12 +60,17 @@ update msg model =
                     , Cmd.none
                     )
 
+        ChangeContent modified ->
+            ( { model | content = modified }
+            , Cmd.none
+            )
+
 
 
 -- VIEW
 
 
-view : Model -> Html msg
+view : Model -> Html Msg
 view model =
     div []
         [ div
@@ -78,7 +84,18 @@ view model =
             , class "siimple--color-dark"
             ]
             []
-        , toHtmlWith options [] model.content
+        , div []
+            [ div []
+                [ textarea
+                    [ class "siimple-textarea"
+                    , class "siimple-textarea--fluid"
+                    , rows 10
+                    , onInput ChangeContent
+                    ]
+                    [ text model.content ]
+                ]
+            , div [] [ toHtmlWith options [] model.content ]
+            ]
         ]
 
 
