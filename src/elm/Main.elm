@@ -336,7 +336,7 @@ baseView model title container =
         [ class "siimple-footer"
         , align "center"
         ]
-        [ text "© 2019 Yui Ito" ]
+        []
     ]
 
 
