@@ -1,4 +1,4 @@
-port module Main exposing (Credential, LoginData, Model, Msg(..), Page(..), Session(..), baseHtml, baseView, init, loginDecorder, loginUrl, main, portGetLocalStorage, portResLocalStorage, portSetLocalStorage, postLogin, route, routeParser, routeUrl, stepArticle, stepArticleList, subscriptions, update, view)
+port module Main exposing (LoginData, Model, Msg(..), Page(..), baseHtml, baseView, init, loginDecorder, loginUrl, main, portGetLocalStorage, portResLocalStorage, portSetLocalStorage, postLogin, route, routeParser, routeUrl, stepArticle, stepArticleList, subscriptions, update, view)
 
 import Browser
 import Browser.Navigation as Nav
@@ -10,6 +10,7 @@ import Json.Decode as Decode
 import Markdown exposing (Options, defaultOptions, toHtmlWith)
 import Page.Article as Article
 import Page.ArticleList as ArticleList
+import Session exposing (Credential, Session(..))
 import Task
 import Tuple
 import Url
@@ -56,17 +57,6 @@ type alias Model =
     }
 
 
-type alias Credential =
-    { username : String
-    , password : String
-    }
-
-
-type Session
-    = Loggedin String
-    | Guest (Maybe Credential)
-
-
 type alias LoginData =
     { token : String
     }
@@ -111,8 +101,13 @@ routeParser model =
     oneOf
         [ route top
             (stepArticleList model ArticleList.init)
-        , route (s "article" </> string)
-            (\id -> stepArticle model (Article.init id))
+        , route (s "article" </> string) <|
+            case model.session of
+                Session.Loggedin token ->
+                    \id -> stepArticle model (Article.init id token)
+
+                Session.Guest _ ->
+                    \_ -> stepArticleList model ArticleList.init
         ]
 
 

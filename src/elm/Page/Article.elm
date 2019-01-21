@@ -6,6 +6,7 @@ import Html.Events exposing (..)
 import Http
 import Json.Decode as Decode
 import Markdown exposing (Options, defaultOptions, toHtmlWith)
+import Session
 import Task
 import Url.Builder as UrlBuilder
 
@@ -17,6 +18,7 @@ import Url.Builder as UrlBuilder
 type alias Model =
     { articleInfo : ArticleInfo
     , content : String
+    , token : Session.LoggedinToken
     , editMode : EditMode
 
     -- TOOD: ここでLoadking状態とかもたせればよさげ。
@@ -30,14 +32,15 @@ type EditMode
 
 type alias ArticleInfo =
     { title : String
+    , id : Int
     , createdAt : String
     }
 
 
-init : String -> ( Model, Cmd Msg )
-init id =
-    ( Model (ArticleInfo "" "") "" Editor
-    , fetchContent id
+init : String -> Session.LoggedinToken -> ( Model, Cmd Msg )
+init id token =
+    ( Model (ArticleInfo "" 0 "") "" token Editor
+    , fetchContent id token
     )
 
 
@@ -50,6 +53,7 @@ type Msg
     | ChangeContent String
     | ClickedEditor
     | ClickedPreview
+    | ClickedUpdate
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -81,6 +85,11 @@ update msg model =
         ClickedPreview ->
             ( { model | editMode = Preview }
             , Cmd.none
+            )
+
+        ClickedUpdate ->
+            ( model
+            , updateContent model
             )
 
 
@@ -115,6 +124,10 @@ view model =
             , div [ class "siimple-jumbotron-detail" ] [ text <| "Posted at " ++ model.articleInfo.createdAt ]
             ]
         , div []
+            [ span [ class "siimple-field" ] [ button [ class "siimple-btn", onClick ClickedUpdate ] [ text "update" ] ]
+            , span [ class "siimple-field" ] [ button [ class "siimple-btn" ] [ text "delete" ] ]
+            ]
+        , div []
             [ div
                 [ class "siimple-tabs"
                 , class "siimple-tabs--boxed"
@@ -146,8 +159,8 @@ options =
 -- HTTP
 
 
-fetchContent : String -> Cmd Msg
-fetchContent id =
+fetchContent : String -> Session.LoggedinToken -> Cmd Msg
+fetchContent id token =
     let
         articleTask =
             Http.get (articleUrl id) articleDecorder |> Http.toTask
@@ -158,7 +171,7 @@ fetchContent id =
     -- I refer this redit
     -- https://www.reddit.com/r/elm/comments/91t937/is_it_possible_to_make_multiple_http_requests_in/
     Task.attempt ShowContent <|
-        Task.map2 (\articleInfo content -> Model articleInfo content Editor) articleTask contentTask
+        Task.map2 (\articleInfo content -> Model articleInfo content token Editor) articleTask contentTask
 
 
 contentUrl : String -> String
@@ -177,6 +190,28 @@ articleUrl id =
 
 articleDecorder : Decode.Decoder ArticleInfo
 articleDecorder =
-    Decode.map2 ArticleInfo
+    Decode.map3 ArticleInfo
         (Decode.field "title" Decode.string)
+        (Decode.field "id" Decode.int)
         (Decode.field "added_at" Decode.string)
+
+
+updateContent : Model -> Cmd Msg
+updateContent model =
+    Http.send ShowContent (updateContentRequest model)
+
+
+updateContentRequest : Model -> Http.Request Model
+updateContentRequest model =
+    Http.request
+        { method = "PUT"
+        , headers =
+            [ Http.header "X-Requested-With" "XMLHttpRequest"
+            , Http.header "Authorization" ("token " ++ model.token)
+            ]
+        , url = articleUrl (String.fromInt model.articleInfo.id)
+        , body = Http.stringBody "application/x-www-form-urlencoded" ("content=" ++ model.content)
+        , expect = Http.expectStringResponse (\_ -> Ok model)
+        , timeout = Nothing
+        , withCredentials = False
+        }
