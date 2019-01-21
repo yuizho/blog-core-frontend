@@ -1,4 +1,4 @@
-module Page.Article exposing (Model, Msg, init, update, view)
+module Page.Article exposing (ArticlePageMode(..), Model, Msg, init, update, view)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -16,13 +16,19 @@ import Url.Builder as UrlBuilder
 
 
 type alias Model =
-    { articleInfo : ArticleInfo
+    { articlePageMode : ArticlePageMode
+    , articleInfo : ArticleInfo
     , content : String
     , token : Session.LoggedinToken
     , editMode : EditMode
 
     -- TOOD: ここでLoadking状態とかもたせればよさげ。
     }
+
+
+type ArticlePageMode
+    = Create
+    | Modify String
 
 
 type EditMode
@@ -37,11 +43,18 @@ type alias ArticleInfo =
     }
 
 
-init : String -> Session.LoggedinToken -> ( Model, Cmd Msg )
-init id token =
-    ( Model (ArticleInfo "" 0 "") "" token Editor
-    , fetchContent id token
-    )
+init : ArticlePageMode -> Session.LoggedinToken -> ( Model, Cmd Msg )
+init articlePageMode token =
+    case articlePageMode of
+        Create ->
+            ( Model articlePageMode (ArticleInfo "" 0 "") "" token Editor
+            , Cmd.none
+            )
+
+        Modify id ->
+            ( Model articlePageMode (ArticleInfo "" 0 "") "" token Editor
+            , fetchContent id token
+            )
 
 
 
@@ -50,10 +63,11 @@ init id token =
 
 type Msg
     = ShowContent (Result Http.Error { articleInfo : ArticleInfo, content : String })
+    | ChangeTitle String
     | ChangeContent String
     | ClickedEditor
     | ClickedPreview
-    | ClickedUpdate
+    | ClickedSubmit
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -63,7 +77,11 @@ update msg model =
             case result of
                 Ok data ->
                     -- TODO: when came here directly, some loading image shold be shown
-                    ( { model | articleInfo = data.articleInfo, content = data.content }
+                    ( { model
+                        | articleInfo = data.articleInfo
+                        , content = data.content
+                        , articlePageMode = Modify (String.fromInt <| data.articleInfo.id)
+                      }
                     , Cmd.none
                     )
 
@@ -71,6 +89,17 @@ update msg model =
                     ( model
                     , Cmd.none
                     )
+
+        ChangeTitle modifiedTitle ->
+            let
+                articleInfo =
+                    model.articleInfo
+            in
+            ( { model
+                | articleInfo = { articleInfo | title = modifiedTitle }
+              }
+            , Cmd.none
+            )
 
         ChangeContent modified ->
             ( { model | content = modified }
@@ -87,9 +116,9 @@ update msg model =
             , Cmd.none
             )
 
-        ClickedUpdate ->
+        ClickedSubmit ->
             ( model
-            , updateContent model
+            , sendArticle model
             )
 
 
@@ -100,13 +129,27 @@ update msg model =
 view : Model -> Html Msg
 view model =
     let
+        pageModeConfig =
+            case model.articlePageMode of
+                Create ->
+                    [ span [ class "siimple-field" ] [ button [ class "siimple-btn", onClick ClickedSubmit ] [ text "create" ] ]
+                    ]
+
+                Modify string ->
+                    [ span [ class "siimple-field" ]
+                        [ button [ class "siimple-btn", onClick ClickedSubmit ] [ text "update" ]
+                        , button [ class "siimple-btn" ] [ text "delete" ]
+                        ]
+                    ]
+
         editModeConfig =
             case model.editMode of
                 Editor ->
                     { editorDisplay = "block"
                     , editorTabclass = [ class "siimple-tabs-item", class "siimple-tabs-item--selected" ]
                     , previewDisplay = "none"
-                    , previewTabclass = [ class "siimple-tabs-item" ]
+                    , previewTabclass =
+                        [ class "siimple-tabs-item" ]
                     }
 
                 Preview ->
@@ -117,15 +160,16 @@ view model =
                     }
     in
     div []
-        [ div
-            [ class "siimple-jumbotron"
-            ]
-            [ div [ class "siimple-jumbotron-title" ] [ text model.articleInfo.title ]
-            , div [ class "siimple-jumbotron-detail" ] [ text <| "Posted at " ++ model.articleInfo.createdAt ]
-            ]
+        [ div [] pageModeConfig
         , div []
-            [ span [ class "siimple-field" ] [ button [ class "siimple-btn", onClick ClickedUpdate ] [ text "update" ] ]
-            , span [ class "siimple-field" ] [ button [ class "siimple-btn" ] [ text "delete" ] ]
+            [ input
+                [ class "siimple-input"
+                , class "siimple-input--fluid"
+                , placeholder "title"
+                , onInput ChangeTitle
+                , value model.articleInfo.title
+                ]
+                [ text model.articleInfo.title ]
             ]
         , div []
             [ div
@@ -163,7 +207,7 @@ fetchContent : String -> Session.LoggedinToken -> Cmd Msg
 fetchContent id token =
     let
         articleTask =
-            Http.get (articleUrl id) articleDecorder |> Http.toTask
+            Http.get (createdArticleUrl id) articleDecorder |> Http.toTask
 
         contentTask =
             Http.getString (contentUrl id) |> Http.toTask
@@ -181,8 +225,15 @@ contentUrl id =
         []
 
 
-articleUrl : String -> String
-articleUrl id =
+articleUrl : String
+articleUrl =
+    UrlBuilder.crossOrigin "http://localhost:8080"
+        [ "api", "articles" ]
+        []
+
+
+createdArticleUrl : String -> String
+createdArticleUrl id =
     UrlBuilder.crossOrigin "http://localhost:8080"
         [ "api", "articles", id ]
         []
@@ -196,21 +247,30 @@ articleDecorder =
         (Decode.field "added_at" Decode.string)
 
 
-updateContent : Model -> Cmd Msg
-updateContent model =
-    Http.send ShowContent (updateContentRequest model)
+sendArticle : Model -> Cmd Msg
+sendArticle model =
+    Http.send ShowContent (sendArticleRequest model)
 
 
-updateContentRequest : Model -> Http.Request { articleInfo : ArticleInfo, content : String }
-updateContentRequest model =
+sendArticleRequest : Model -> Http.Request { articleInfo : ArticleInfo, content : String }
+sendArticleRequest model =
+    let
+        ( method, url ) =
+            case model.articlePageMode of
+                Create ->
+                    ( "POST", articleUrl )
+
+                Modify id ->
+                    ( "PUT", createdArticleUrl (String.fromInt model.articleInfo.id) )
+    in
     Http.request
-        { method = "PUT"
+        { method = method
         , headers =
             [ Http.header "X-Requested-With" "XMLHttpRequest"
             , Http.header "Authorization" ("token " ++ model.token)
             ]
-        , url = articleUrl (String.fromInt model.articleInfo.id)
-        , body = Http.stringBody "application/x-www-form-urlencoded" ("content=" ++ model.content)
+        , url = url
+        , body = Http.stringBody "application/x-www-form-urlencoded" ("content=" ++ model.content ++ "&title=" ++ model.articleInfo.title)
         , expect = Http.expectStringResponse (\_ -> Ok { articleInfo = model.articleInfo, content = model.content })
         , timeout = Nothing
         , withCredentials = False

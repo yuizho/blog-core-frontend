@@ -101,10 +101,17 @@ routeParser model =
     oneOf
         [ route top
             (stepArticleList model ArticleList.init)
+        , route (s "article") <|
+            case model.session of
+                Session.Loggedin token ->
+                    stepArticle model (Article.init Article.Create token)
+
+                Session.Guest _ ->
+                    stepArticleList model ArticleList.init
         , route (s "article" </> string) <|
             case model.session of
                 Session.Loggedin token ->
-                    \id -> stepArticle model (Article.init id token)
+                    \id -> stepArticle model (Article.init (Article.Modify id) token)
 
                 Session.Guest _ ->
                     \_ -> stepArticleList model ArticleList.init
@@ -345,7 +352,8 @@ viewNavBar model title =
                 Loggedin _ ->
                     [ titleDom
                     , div [ class "siimple--float-right" ]
-                        [ div [ class "siimple-navbar-item", onClick Logout ] [ text "Logout" ]
+                        [ a [ class "siimple-navbar-item", href "#/article" ] [ text "Create Article" ]
+                        , div [ class "siimple-navbar-item", onClick Logout ] [ text "Logout" ]
                         ]
                     ]
 
