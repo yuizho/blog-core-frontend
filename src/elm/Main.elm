@@ -1,4 +1,4 @@
-port module Main exposing (Credential, LoginData, Model, Msg(..), Page(..), Session(..), baseHtml, baseView, init, loginDecorder, loginUrl, main, portGetLocalStorage, portResLocalStorage, portSetLocalStorage, postLogin, route, routeParser, routeUrl, stepArticle, stepArticleList, subscriptions, update, view)
+port module Main exposing (LoginData, Model, Msg(..), Page(..), baseHtml, baseView, init, loginDecorder, loginUrl, main, portGetLocalStorage, portResLocalStorage, portSetLocalStorage, postLogin, route, routeParser, routeUrl, stepArticle, stepArticleList, subscriptions, update, view)
 
 import Browser
 import Browser.Navigation as Nav
@@ -10,6 +10,7 @@ import Json.Decode as Decode
 import Markdown exposing (Options, defaultOptions, toHtmlWith)
 import Page.Article as Article
 import Page.ArticleList as ArticleList
+import Session exposing (Credential, Session(..))
 import Task
 import Tuple
 import Url
@@ -56,17 +57,6 @@ type alias Model =
     }
 
 
-type alias Credential =
-    { username : String
-    , password : String
-    }
-
-
-type Session
-    = Loggedin String
-    | Guest (Maybe Credential)
-
-
 type alias LoginData =
     { token : String
     }
@@ -111,8 +101,20 @@ routeParser model =
     oneOf
         [ route top
             (stepArticleList model ArticleList.init)
-        , route (s "article" </> string)
-            (\id -> stepArticle model (Article.init id))
+        , route (s "article") <|
+            case model.session of
+                Session.Loggedin token ->
+                    stepArticle model (Article.init model.key Article.Create token)
+
+                Session.Guest _ ->
+                    stepArticleList model ArticleList.init
+        , route (s "article" </> string) <|
+            case model.session of
+                Session.Loggedin token ->
+                    \id -> stepArticle model (Article.init model.key (Article.Modify id) token)
+
+                Session.Guest _ ->
+                    \_ -> stepArticleList model ArticleList.init
         ]
 
 
@@ -315,7 +317,7 @@ view model =
                     baseHtml model title <| ArticleList.view subModel
 
                 ArticlePage subModel ->
-                    baseHtml model title <| Article.view subModel
+                    baseHtml model title (Html.map (\subMsg -> GoArticle subMsg) <| Article.view subModel)
 
 
 baseHtml model title content =
@@ -336,7 +338,7 @@ baseView model title container =
         [ class "siimple-footer"
         , align "center"
         ]
-        [ text "© 2019 Yui Ito" ]
+        []
     ]
 
 
@@ -350,7 +352,8 @@ viewNavBar model title =
                 Loggedin _ ->
                     [ titleDom
                     , div [ class "siimple--float-right" ]
-                        [ div [ class "siimple-navbar-item", onClick Logout ] [ text "Logout" ]
+                        [ a [ class "siimple-navbar-item", href "#/article" ] [ text "Create Article" ]
+                        , div [ class "siimple-navbar-item", onClick Logout ] [ text "Logout" ]
                         ]
                     ]
 
