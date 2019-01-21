@@ -49,7 +49,7 @@ init id token =
 
 
 type Msg
-    = ShowContent (Result Http.Error Model)
+    = ShowContent (Result Http.Error { articleInfo : ArticleInfo, content : String })
     | ChangeContent String
     | ClickedEditor
     | ClickedPreview
@@ -61,9 +61,9 @@ update msg model =
     case msg of
         ShowContent result ->
             case result of
-                Ok content ->
+                Ok data ->
                     -- TODO: when came here directly, some loading image shold be shown
-                    ( content
+                    ( { model | articleInfo = data.articleInfo, content = data.content }
                     , Cmd.none
                     )
 
@@ -171,7 +171,7 @@ fetchContent id token =
     -- I refer this redit
     -- https://www.reddit.com/r/elm/comments/91t937/is_it_possible_to_make_multiple_http_requests_in/
     Task.attempt ShowContent <|
-        Task.map2 (\articleInfo content -> Model articleInfo content token Editor) articleTask contentTask
+        Task.map2 (\articleInfo content -> { articleInfo = articleInfo, content = content }) articleTask contentTask
 
 
 contentUrl : String -> String
@@ -201,7 +201,7 @@ updateContent model =
     Http.send ShowContent (updateContentRequest model)
 
 
-updateContentRequest : Model -> Http.Request Model
+updateContentRequest : Model -> Http.Request { articleInfo : ArticleInfo, content : String }
 updateContentRequest model =
     Http.request
         { method = "PUT"
@@ -211,7 +211,7 @@ updateContentRequest model =
             ]
         , url = articleUrl (String.fromInt model.articleInfo.id)
         , body = Http.stringBody "application/x-www-form-urlencoded" ("content=" ++ model.content)
-        , expect = Http.expectStringResponse (\_ -> Ok model)
+        , expect = Http.expectStringResponse (\_ -> Ok { articleInfo = model.articleInfo, content = model.content })
         , timeout = Nothing
         , withCredentials = False
         }
