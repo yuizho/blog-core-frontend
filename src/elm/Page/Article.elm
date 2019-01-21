@@ -1,5 +1,6 @@
 module Page.Article exposing (ArticlePageMode(..), Model, Msg, init, update, view)
 
+import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
@@ -16,7 +17,8 @@ import Url.Builder as UrlBuilder
 
 
 type alias Model =
-    { articlePageMode : ArticlePageMode
+    { key : Nav.Key
+    , articlePageMode : ArticlePageMode
     , articleInfo : ArticleInfo
     , content : String
     , token : Session.LoggedinToken
@@ -43,16 +45,16 @@ type alias ArticleInfo =
     }
 
 
-init : ArticlePageMode -> Session.LoggedinToken -> ( Model, Cmd Msg )
-init articlePageMode token =
+init : Nav.Key -> ArticlePageMode -> Session.LoggedinToken -> ( Model, Cmd Msg )
+init key articlePageMode token =
     case articlePageMode of
         Create ->
-            ( Model articlePageMode (ArticleInfo "" 0 "") "" token Editor
+            ( Model key articlePageMode (ArticleInfo "" 0 "") "" token Editor
             , Cmd.none
             )
 
         Modify id ->
-            ( Model articlePageMode (ArticleInfo "" 0 "") "" token Editor
+            ( Model key articlePageMode (ArticleInfo "" 0 "") "" token Editor
             , fetchContent id token
             )
 
@@ -68,6 +70,8 @@ type Msg
     | ClickedEditor
     | ClickedPreview
     | ClickedSubmit
+    | ClickedDelete
+    | DeleteledContent (Result Http.Error ())
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -121,6 +125,21 @@ update msg model =
             , sendArticle model
             )
 
+        ClickedDelete ->
+            ( model
+            , deleteArticle model
+            )
+
+        DeleteledContent result ->
+            case result of
+                Ok _ ->
+                    ( model, Nav.pushUrl model.key "/" )
+
+                Err _ ->
+                    ( model
+                    , Cmd.none
+                    )
+
 
 
 -- VIEW
@@ -138,7 +157,7 @@ view model =
                 Modify string ->
                     [ span [ class "siimple-field" ]
                         [ button [ class "siimple-btn", onClick ClickedSubmit ] [ text "update" ]
-                        , button [ class "siimple-btn" ] [ text "delete" ]
+                        , button [ class "siimple-btn", onClick ClickedDelete ] [ text "delete" ]
                         ]
                     ]
 
@@ -272,6 +291,27 @@ sendArticleRequest model =
         , url = url
         , body = Http.stringBody "application/x-www-form-urlencoded" ("content=" ++ model.content ++ "&title=" ++ model.articleInfo.title)
         , expect = Http.expectStringResponse (\_ -> Ok { articleInfo = model.articleInfo, content = model.content })
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
+
+deleteArticle : Model -> Cmd Msg
+deleteArticle model =
+    Http.send DeleteledContent (deleteArticleRequest model)
+
+
+deleteArticleRequest : Model -> Http.Request ()
+deleteArticleRequest model =
+    Http.request
+        { method = "DELETE"
+        , headers =
+            [ Http.header "X-Requested-With" "XMLHttpRequest"
+            , Http.header "Authorization" ("token " ++ model.token)
+            ]
+        , url = createdArticleUrl (String.fromInt model.articleInfo.id)
+        , body = Http.emptyBody
+        , expect = Http.expectStringResponse (\_ -> Ok ())
         , timeout = Nothing
         , withCredentials = False
         }

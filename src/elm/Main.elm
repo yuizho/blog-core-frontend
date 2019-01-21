@@ -104,14 +104,14 @@ routeParser model =
         , route (s "article") <|
             case model.session of
                 Session.Loggedin token ->
-                    stepArticle model (Article.init Article.Create token)
+                    stepArticle model (Article.init model.key Article.Create token)
 
                 Session.Guest _ ->
                     stepArticleList model ArticleList.init
         , route (s "article" </> string) <|
             case model.session of
                 Session.Loggedin token ->
-                    \id -> stepArticle model (Article.init (Article.Modify id) token)
+                    \id -> stepArticle model (Article.init model.key (Article.Modify id) token)
 
                 Session.Guest _ ->
                     \_ -> stepArticleList model ArticleList.init
