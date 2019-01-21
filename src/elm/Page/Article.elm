@@ -7,6 +7,7 @@ import Html.Events exposing (..)
 import Http
 import Json.Decode as Decode
 import Markdown exposing (Options, defaultOptions, toHtmlWith)
+import Notification exposing (MessageType(..), Notification)
 import Session
 import Task
 import Url.Builder as UrlBuilder
@@ -23,8 +24,9 @@ type alias Model =
     , content : String
     , token : Session.LoggedinToken
     , editMode : EditMode
+    , notification : Maybe Notification
 
-    -- TOOD: ここでLoadking状態とかもたせればよさげ。
+    -- TOOD: ここでLoadding状態とかもたせればよさげ。おそらく、Modelのtypeも分けるとなおいいかな。
     }
 
 
@@ -49,12 +51,12 @@ init : Nav.Key -> ArticlePageMode -> Session.LoggedinToken -> ( Model, Cmd Msg )
 init key articlePageMode token =
     case articlePageMode of
         Create ->
-            ( Model key articlePageMode (ArticleInfo "" 0 "") "" token Editor
+            ( Model key articlePageMode (ArticleInfo "" 0 "") "" token Editor Nothing
             , Cmd.none
             )
 
         Modify id ->
-            ( Model key articlePageMode (ArticleInfo "" 0 "") "" token Editor
+            ( Model key articlePageMode (ArticleInfo "" 0 "") "" token Editor Nothing
             , fetchContent id token
             )
 
@@ -65,8 +67,10 @@ init key articlePageMode token =
 
 type Msg
     = ShowContent (Result Http.Error { articleInfo : ArticleInfo, content : String })
+    | ShowContentAfterSubmit (Result Http.Error ArticleInfo)
     | ChangeTitle String
     | ChangeContent String
+    | CloseMessage
     | ClickedEditor
     | ClickedPreview
     | ClickedSubmit
@@ -90,7 +94,24 @@ update msg model =
                     )
 
                 Err _ ->
-                    ( model
+                    ( { model | notification = Just <| Notification Error "Unexpected Error was occurred......" }
+                    , Cmd.none
+                    )
+
+        ShowContentAfterSubmit result ->
+            case result of
+                Ok articleInfo ->
+                    -- TODO: when came here directly, some loading image shold be shown
+                    ( { model
+                        | articleInfo = articleInfo
+                        , articlePageMode = Modify (String.fromInt <| articleInfo.id)
+                        , notification = Just <| Notification Success "Succeeded!!"
+                      }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( { model | notification = Just <| Notification Error "Unexpected Error was occurred......" }
                     , Cmd.none
                     )
 
@@ -107,6 +128,11 @@ update msg model =
 
         ChangeContent modified ->
             ( { model | content = modified }
+            , Cmd.none
+            )
+
+        CloseMessage ->
+            ( { model | notification = Nothing }
             , Cmd.none
             )
 
@@ -136,7 +162,7 @@ update msg model =
                     ( model, Nav.pushUrl model.key "/" )
 
                 Err _ ->
-                    ( model
+                    ( { model | notification = Just <| Notification Error "Unexpected Error was occurred......" }
                     , Cmd.none
                     )
 
@@ -179,7 +205,8 @@ view model =
                     }
     in
     div []
-        [ div [] pageModeConfig
+        [ viewNotifyIfNeeded model.notification
+        , div [] pageModeConfig
         , div []
             [ input
                 [ class "siimple-input"
@@ -210,6 +237,36 @@ view model =
                 ]
             , div [ style "display" editModeConfig.previewDisplay ] [ toHtmlWith options [] model.content ]
             ]
+        ]
+
+
+viewNotifyIfNeeded : Maybe Notification -> Html Msg
+viewNotifyIfNeeded notification =
+    notification
+        |> Maybe.map (\n -> viewNotification n)
+        |> Maybe.withDefault (div [] [])
+
+
+viewNotification : Notification -> Html Msg
+viewNotification notification =
+    let
+        messageTypeClass =
+            case notification.messageType of
+                Info ->
+                    "siimple-alert--primary"
+
+                Success ->
+                    "siimple-alert--success"
+
+                Warn ->
+                    "siimple-alert--warning"
+
+                Error ->
+                    "siimple-alert--error"
+    in
+    div [ class "siimple-alert", class messageTypeClass ]
+        [ div [ class "siimple-alert-close", onClick CloseMessage ] []
+        , text notification.message
         ]
 
 
@@ -268,10 +325,10 @@ articleDecorder =
 
 sendArticle : Model -> Cmd Msg
 sendArticle model =
-    Http.send ShowContent (sendArticleRequest model)
+    Http.send ShowContentAfterSubmit (sendArticleRequest model)
 
 
-sendArticleRequest : Model -> Http.Request { articleInfo : ArticleInfo, content : String }
+sendArticleRequest : Model -> Http.Request ArticleInfo
 sendArticleRequest model =
     let
         ( method, url ) =
@@ -290,7 +347,7 @@ sendArticleRequest model =
             ]
         , url = url
         , body = Http.stringBody "application/x-www-form-urlencoded" ("content=" ++ model.content ++ "&title=" ++ model.articleInfo.title)
-        , expect = Http.expectStringResponse (\_ -> Ok { articleInfo = model.articleInfo, content = model.content })
+        , expect = Http.expectJson articleDecorder
         , timeout = Nothing
         , withCredentials = False
         }
