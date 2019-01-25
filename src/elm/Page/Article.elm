@@ -106,12 +106,8 @@ update msg model =
         ShowContentAfterSubmit result ->
             case result of
                 Ok articleInfo ->
-                    -- TODO: when came here directly, some loading image shold be shown
-                    ( { model
-                        | articleInfo = articleInfo
-                        , articlePageMode = Modify (String.fromInt <| articleInfo.id)
-                      }
-                    , Cmd.none
+                    ( model
+                    , Nav.pushUrl model.key <| "#/article/" ++ String.fromInt articleInfo.id
                     , ShowMessage <| Notification Success "Succeeded!!"
                     )
 
@@ -197,6 +193,7 @@ view model =
                             [ class "siimple-btn"
                             , class "siimple-btn--grey"
                             , style "margin-right" "5px"
+                            , onClick ClickedSubmit
                             ]
                             [ text "update" ]
                         , div
