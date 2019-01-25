@@ -128,14 +128,14 @@ route parser handler =
 stepArticleList : Model -> ( ArticleList.Model, Cmd ArticleList.Msg ) -> ( Model, Cmd Msg )
 stepArticleList model ( articlelist, cmds ) =
     ( { model | page = ArticleListPage articlelist }
-    , Cmd.map GoArticleList cmds
+    , Cmd.map ArticleListUpdate cmds
     )
 
 
 stepArticle : Model -> ( Article.Model, Cmd Article.Msg ) -> ( Model, Cmd Msg )
 stepArticle model ( article, cmds ) =
     ( { model | page = ArticlePage article }
-    , Cmd.map GoArticle cmds
+    , Cmd.map ArticleUpdate cmds
     )
 
 
@@ -161,8 +161,8 @@ type Msg
     | LoggedinSession (Result Http.Error LoginData)
     | Logout
     | LoggedoutSession (Result Http.Error ())
-    | GoArticleList ArticleList.Msg
-    | GoArticle Article.Msg
+    | ArticleListUpdate ArticleList.Msg
+    | ArticleUpdate Article.Msg
     | CloseMessage
     | ShowMessage Notification
     | LinkClicked Browser.UrlRequest
@@ -261,7 +261,7 @@ update msg model =
                 Err _ ->
                     ( model, Cmd.none )
 
-        GoArticleList subMsg ->
+        ArticleListUpdate subMsg ->
             case model.page of
                 ArticleListPage article ->
                     stepArticleList model (ArticleList.update subMsg article)
@@ -269,7 +269,7 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        GoArticle subMsg ->
+        ArticleUpdate subMsg ->
             case model.page of
                 ArticlePage articleModel ->
                     let
@@ -281,7 +281,7 @@ update msg model =
                     in
                     ( newModel
                     , Cmd.batch
-                        [ Cmd.map GoArticle childCommands
+                        [ Cmd.map ArticleUpdate childCommands
                         , cmdsFromSignal
                         ]
                     )
@@ -351,7 +351,7 @@ view model =
                     baseHtml model title <| ArticleList.view subModel
 
                 ArticlePage subModel ->
-                    baseHtml model title (Html.map (\subMsg -> GoArticle subMsg) <| Article.view subModel)
+                    baseHtml model title (Html.map (\subMsg -> ArticleUpdate subMsg) <| Article.view subModel)
 
 
 baseHtml model title content =
