@@ -1,4 +1,4 @@
-port module Main exposing (LoginData, Model, Msg(..), Page(..), baseHtml, baseView, init, loginDecorder, loginUrl, main, portGetLocalStorage, portResLocalStorage, portSetLocalStorage, postLogin, route, routeParser, routeUrl, stepArticle, stepArticleList, subscriptions, update, view)
+port module Main exposing (Msg(..), portGetLocalStorage, portResLocalStorage, portSetLocalStorage, postLogin)
 
 import Browser
 import Browser.Navigation as Nav
@@ -8,6 +8,7 @@ import Html.Events exposing (..)
 import Http
 import Json.Decode as Decode
 import Markdown exposing (Options, defaultOptions, toHtmlWith)
+import Notification exposing (..)
 import Page.Article as Article
 import Page.ArticleList as ArticleList
 import Session exposing (Credential, Session(..))
@@ -53,6 +54,7 @@ type alias Model =
     { url : Url.Url
     , key : Nav.Key
     , session : Session
+    , notification : Maybe Notification
     , page : Page
     }
 
@@ -64,7 +66,7 @@ type alias LoginData =
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url key =
-    ( Model url key (Guest Nothing) <| ArticleListPage (ArticleList.Model [])
+    ( Model url key (Guest Nothing) Nothing <| ArticleListPage (ArticleList.Model [])
     , portGetLocalStorage "loggein_token"
     )
 
@@ -137,6 +139,16 @@ stepArticle model ( article, cmds ) =
     )
 
 
+processArticleSignal : Article.OutMsg -> Model -> ( Model, Cmd Msg )
+processArticleSignal signal model =
+    case signal of
+        Article.ShowMessage notification ->
+            ( { model | notification = Just notification }, Cmd.none )
+
+        Article.NoSignal ->
+            ( model, Cmd.none )
+
+
 
 -- UPDATE
 
@@ -151,6 +163,8 @@ type Msg
     | LoggedoutSession (Result Http.Error ())
     | GoArticleList ArticleList.Msg
     | GoArticle Article.Msg
+    | CloseMessage
+    | ShowMessage Notification
     | LinkClicked Browser.UrlRequest
     | UrlChanged Url.Url
 
@@ -257,11 +271,31 @@ update msg model =
 
         GoArticle subMsg ->
             case model.page of
-                ArticlePage article ->
-                    stepArticle model (Article.update subMsg article)
+                ArticlePage articleModel ->
+                    let
+                        ( newArticleModel, childCommands, signalForParent ) =
+                            Article.update subMsg articleModel
+
+                        ( newModel, cmdsFromSignal ) =
+                            processArticleSignal signalForParent { model | page = ArticlePage newArticleModel }
+                    in
+                    ( newModel
+                    , Cmd.batch
+                        [ Cmd.map GoArticle childCommands
+                        , cmdsFromSignal
+                        ]
+                    )
 
                 _ ->
                     ( model, Cmd.none )
+
+        ShowMessage notification ->
+            ( { model | notification = Just notification }, Cmd.none )
+
+        CloseMessage ->
+            ( { model | notification = Nothing }
+            , Cmd.none
+            )
 
         LinkClicked urlRequest ->
             case urlRequest of
@@ -329,6 +363,7 @@ baseHtml model title content =
 baseView : Model -> String -> Html Msg -> List (Html Msg)
 baseView model title container =
     [ viewNavBar model title
+    , viewNotifyIfNeeded model.notification
     , div
         [ class "siimple-content"
         , class "siimple-content--large"
@@ -366,6 +401,36 @@ viewNavBar model title =
         , class "siimple-navbar--dark"
         ]
         navContents
+
+
+viewNotifyIfNeeded : Maybe Notification -> Html Msg
+viewNotifyIfNeeded notification =
+    notification
+        |> Maybe.map (\n -> viewNotification n)
+        |> Maybe.withDefault (div [] [])
+
+
+viewNotification : Notification -> Html Msg
+viewNotification notification =
+    let
+        messageTypeClass =
+            case notification.messageType of
+                Info ->
+                    "siimple-alert--primary"
+
+                Success ->
+                    "siimple-alert--success"
+
+                Warn ->
+                    "siimple-alert--warning"
+
+                Error ->
+                    "siimple-alert--error"
+    in
+    div [ class "siimple-alert", class messageTypeClass ]
+        [ div [ class "siimple-alert-close", onClick CloseMessage ] []
+        , text notification.message
+        ]
 
 
 

@@ -1,4 +1,4 @@
-module Page.Article exposing (ArticlePageMode(..), Model, Msg, init, update, view)
+module Page.Article exposing (ArticlePageMode(..), Model, Msg, OutMsg(..), init, update, view)
 
 import Browser.Navigation as Nav
 import Html exposing (..)
@@ -24,7 +24,6 @@ type alias Model =
     , content : String
     , token : Session.LoggedinToken
     , editMode : EditMode
-    , notification : Maybe Notification
 
     -- TOOD: ここでLoadding状態とかもたせればよさげ。おそらく、Modelのtypeも分けるとなおいいかな。
     }
@@ -51,12 +50,12 @@ init : Nav.Key -> ArticlePageMode -> Session.LoggedinToken -> ( Model, Cmd Msg )
 init key articlePageMode token =
     case articlePageMode of
         Create ->
-            ( Model key articlePageMode (ArticleInfo "" 0 "") "" token Editor Nothing
+            ( Model key articlePageMode (ArticleInfo "" 0 "") "" token Editor
             , Cmd.none
             )
 
         Modify id ->
-            ( Model key articlePageMode (ArticleInfo "" 0 "") "" token Editor Nothing
+            ( Model key articlePageMode (ArticleInfo "" 0 "") "" token Editor
             , fetchContent id token
             )
 
@@ -65,12 +64,16 @@ init key articlePageMode token =
 -- UPDATE
 
 
+type OutMsg
+    = ShowMessage Notification
+    | NoSignal
+
+
 type Msg
     = ShowContent (Result Http.Error { articleInfo : ArticleInfo, content : String })
     | ShowContentAfterSubmit (Result Http.Error ArticleInfo)
     | ChangeTitle String
     | ChangeContent String
-    | CloseMessage
     | ClickedEditor
     | ClickedPreview
     | ClickedSubmit
@@ -78,7 +81,7 @@ type Msg
     | DeleteledContent (Result Http.Error ())
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
+update : Msg -> Model -> ( Model, Cmd Msg, OutMsg )
 update msg model =
     case msg of
         ShowContent result ->
@@ -91,11 +94,13 @@ update msg model =
                         , articlePageMode = Modify (String.fromInt <| data.articleInfo.id)
                       }
                     , Cmd.none
+                    , NoSignal
                     )
 
                 Err _ ->
-                    ( { model | notification = Just <| Notification Error "Unexpected Error was occurred......" }
+                    ( model
                     , Cmd.none
+                    , ShowMessage <| Notification Error "Unexpected Error was occurred......"
                     )
 
         ShowContentAfterSubmit result ->
@@ -105,14 +110,15 @@ update msg model =
                     ( { model
                         | articleInfo = articleInfo
                         , articlePageMode = Modify (String.fromInt <| articleInfo.id)
-                        , notification = Just <| Notification Success "Succeeded!!"
                       }
                     , Cmd.none
+                    , ShowMessage <| Notification Success "Succeeded!!"
                     )
 
                 Err _ ->
-                    ( { model | notification = Just <| Notification Error "Unexpected Error was occurred......" }
+                    ( model
                     , Cmd.none
+                    , ShowMessage <| Notification Error "Unexpected Error was occurred......"
                     )
 
         ChangeTitle modifiedTitle ->
@@ -124,46 +130,51 @@ update msg model =
                 | articleInfo = { articleInfo | title = modifiedTitle }
               }
             , Cmd.none
+            , NoSignal
             )
 
         ChangeContent modified ->
             ( { model | content = modified }
             , Cmd.none
-            )
-
-        CloseMessage ->
-            ( { model | notification = Nothing }
-            , Cmd.none
+            , NoSignal
             )
 
         ClickedEditor ->
             ( { model | editMode = Editor }
             , Cmd.none
+            , NoSignal
             )
 
         ClickedPreview ->
             ( { model | editMode = Preview }
             , Cmd.none
+            , NoSignal
             )
 
         ClickedSubmit ->
             ( model
             , sendArticle model
+            , NoSignal
             )
 
         ClickedDelete ->
             ( model
             , deleteArticle model
+            , NoSignal
             )
 
         DeleteledContent result ->
             case result of
                 Ok _ ->
-                    ( model, Nav.pushUrl model.key "/" )
+                    ( model
+                    , Nav.pushUrl model.key "/"
+                    , NoSignal
+                    )
 
                 Err _ ->
-                    ( { model | notification = Just <| Notification Error "Unexpected Error was occurred......" }
+                    ( model
                     , Cmd.none
+                    , ShowMessage <| Notification Error "Unexpected Error was occurred......"
                     )
 
 
@@ -205,8 +216,7 @@ view model =
                     }
     in
     div []
-        [ viewNotifyIfNeeded model.notification
-        , div [] pageModeConfig
+        [ div [] pageModeConfig
         , div []
             [ input
                 [ class "siimple-input"
@@ -237,36 +247,6 @@ view model =
                 ]
             , div [ style "display" editModeConfig.previewDisplay ] [ toHtmlWith options [] model.content ]
             ]
-        ]
-
-
-viewNotifyIfNeeded : Maybe Notification -> Html Msg
-viewNotifyIfNeeded notification =
-    notification
-        |> Maybe.map (\n -> viewNotification n)
-        |> Maybe.withDefault (div [] [])
-
-
-viewNotification : Notification -> Html Msg
-viewNotification notification =
-    let
-        messageTypeClass =
-            case notification.messageType of
-                Info ->
-                    "siimple-alert--primary"
-
-                Success ->
-                    "siimple-alert--success"
-
-                Warn ->
-                    "siimple-alert--warning"
-
-                Error ->
-                    "siimple-alert--error"
-    in
-    div [ class "siimple-alert", class messageTypeClass ]
-        [ div [ class "siimple-alert-close", onClick CloseMessage ] []
-        , text notification.message
         ]
 
 
