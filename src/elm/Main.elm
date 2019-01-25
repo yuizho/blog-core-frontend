@@ -326,7 +326,7 @@ view : Model -> Browser.Document Msg
 view model =
     let
         title =
-            "日常の記録"
+            "Blog Manager"
     in
     -- decide view with Model Type
     -- refer: https://github.com/rtfeldman/elm-spa-example/blob/ad14ff6f8e50789ba59d8d2b17929f0737fc8373/src/Main.elm#L62
