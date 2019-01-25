@@ -160,7 +160,7 @@ update msg model =
         ClickedDelete ->
             ( model
             , deleteArticle model
-            , NoSignal
+            , ShowMessage <| Notification Success "Deleted!!"
             )
 
         DeleteledContent result ->
@@ -188,13 +188,23 @@ view model =
         pageModeConfig =
             case model.articlePageMode of
                 Create ->
-                    [ span [ class "siimple-field" ] [ button [ class "siimple-btn", onClick ClickedSubmit ] [ text "create" ] ]
+                    [ div [ class "siimple-form" ] [ div [ class "siimple-btn", class "siimple-btn--grey", onClick ClickedSubmit ] [ text "create" ] ]
                     ]
 
                 Modify string ->
-                    [ span [ class "siimple-field" ]
-                        [ button [ class "siimple-btn", onClick ClickedSubmit ] [ text "update" ]
-                        , button [ class "siimple-btn", onClick ClickedDelete ] [ text "delete" ]
+                    [ div [ class "siimple-form" ]
+                        [ div
+                            [ class "siimple-btn"
+                            , class "siimple-btn--grey"
+                            , style "margin-right" "5px"
+                            ]
+                            [ text "update" ]
+                        , div
+                            [ class "siimple-btn"
+                            , class "siimple-btn--grey"
+                            , onClick ClickedDelete
+                            ]
+                            [ text "delete" ]
                         ]
                     ]
 
@@ -217,8 +227,9 @@ view model =
     in
     div []
         [ div [] pageModeConfig
-        , div []
-            [ input
+        , div [ class "siimple-form" ]
+            [ label [ class "siimple-label" ] [ text "Title" ]
+            , input
                 [ class "siimple-input"
                 , class "siimple-input--fluid"
                 , placeholder "title"
