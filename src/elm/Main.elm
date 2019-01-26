@@ -11,6 +11,7 @@ import Markdown exposing (Options, defaultOptions, toHtmlWith)
 import Notification exposing (..)
 import Page.Article as Article
 import Page.ArticleList as ArticleList
+import Page.Settings as Settings
 import Session exposing (Credential, Session(..))
 import Task
 import Tuple
@@ -74,6 +75,7 @@ init _ url key =
 type Page
     = ArticleListPage ArticleList.Model
     | ArticlePage Article.Model
+    | SettingsPage Settings.Model
 
 
 routeUrl : Url.Url -> Model -> ( Model, Cmd Msg )
@@ -117,6 +119,13 @@ routeParser model =
 
                 Session.Guest _ ->
                     \_ -> stepArticleList model ArticleList.init
+        , route (s "settings") <|
+            case model.session of
+                Session.Loggedin token ->
+                    stepSettings model (Settings.init model.key token)
+
+                Session.Guest _ ->
+                    stepArticleList model ArticleList.init
         ]
 
 
@@ -139,6 +148,13 @@ stepArticle model ( article, cmds ) =
     )
 
 
+stepSettings : Model -> ( Settings.Model, Cmd Settings.Msg ) -> ( Model, Cmd Msg )
+stepSettings model ( settings, cmds ) =
+    ( { model | page = SettingsPage settings }
+    , Cmd.map SettingsUpdate cmds
+    )
+
+
 processArticleSignal : Article.OutMsg -> Model -> ( Model, Cmd Msg )
 processArticleSignal signal model =
     case signal of
@@ -146,6 +162,19 @@ processArticleSignal signal model =
             ( { model | notification = Just notification }, Cmd.none )
 
         Article.NoSignal ->
+            ( model, Cmd.none )
+
+
+processSettingsSignal : Settings.OutMsg -> Model -> ( Model, Cmd Msg )
+processSettingsSignal signal model =
+    case signal of
+        Settings.ShowMessage notification ->
+            ( { model | notification = Just notification }, Cmd.none )
+
+        Settings.RemoveMessage ->
+            ( { model | notification = Nothing }, Cmd.none )
+
+        Settings.NoSignal ->
             ( model, Cmd.none )
 
 
@@ -163,6 +192,7 @@ type Msg
     | LoggedoutSession (Result Http.Error ())
     | ArticleListUpdate ArticleList.Msg
     | ArticleUpdate Article.Msg
+    | SettingsUpdate Settings.Msg
     | CloseMessage
     | ShowMessage Notification
     | LinkClicked Browser.UrlRequest
@@ -246,7 +276,7 @@ update msg model =
             case model.session of
                 Loggedin token ->
                     -- TODO: postLogoutとportRemoveLocalStrageはTaskで同時にやったほうがよさげ
-                    ( model, postLogout token )
+                    ( model, Cmd.batch [ portRemoveLocalStorage "loggein_token", postLogout token ] )
 
                 Guest _ ->
                     ( model, Cmd.none )
@@ -255,7 +285,7 @@ update msg model =
             case result of
                 Ok login ->
                     ( { model | session = Guest Nothing }
-                    , portRemoveLocalStorage "loggein_token"
+                    , Cmd.none
                     )
 
                 Err _ ->
@@ -282,6 +312,26 @@ update msg model =
                     ( newModel
                     , Cmd.batch
                         [ Cmd.map ArticleUpdate childCommands
+                        , cmdsFromSignal
+                        ]
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        SettingsUpdate subMsg ->
+            case model.page of
+                SettingsPage articleModel ->
+                    let
+                        ( newSubModel, childCommands, signalForParent ) =
+                            Settings.update subMsg articleModel
+
+                        ( newModel, cmdsFromSignal ) =
+                            processSettingsSignal signalForParent { model | page = SettingsPage newSubModel }
+                    in
+                    ( newModel
+                    , Cmd.batch
+                        [ Cmd.map SettingsUpdate childCommands
                         , cmdsFromSignal
                         ]
                     )
@@ -353,6 +403,9 @@ view model =
                 ArticlePage subModel ->
                     baseHtml model title (Html.map (\subMsg -> ArticleUpdate subMsg) <| Article.view subModel)
 
+                SettingsPage subModel ->
+                    baseHtml model title (Html.map (\subMsg -> SettingsUpdate subMsg) <| Settings.view subModel)
+
 
 baseHtml model title content =
     { title = title
@@ -387,7 +440,8 @@ viewNavBar model title =
                 Loggedin _ ->
                     [ titleDom
                     , div [ class "siimple--float-right" ]
-                        [ a [ class "siimple-navbar-item", href "#/article" ] [ text "Create Article" ]
+                        [ a [ class "siimple-navbar-item", href "#/article" ] [ text "Create" ]
+                        , a [ class "siimple-navbar-item", href "#/settings" ] [ text "Settings" ]
                         , div [ class "siimple-navbar-item", onClick Logout ] [ text "Logout" ]
                         ]
                     ]
