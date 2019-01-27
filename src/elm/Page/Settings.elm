@@ -18,6 +18,8 @@ import Url.Builder as UrlBuilder
 type alias Model =
     { key : Nav.Key
     , token : Session.LoggedinToken
+    , userName : String
+    , sendAbleUserName : Bool
     , currentPassword : Maybe String
     , newPassword1 : Maybe String
     , newPassword2 : Maybe String
@@ -27,7 +29,7 @@ type alias Model =
 
 init : Nav.Key -> Session.LoggedinToken -> ( Model, Cmd Msg )
 init key token =
-    ( Model key token Nothing Nothing Nothing False, Cmd.none )
+    ( Model key token "" False Nothing Nothing Nothing False, fetchUser token )
 
 
 
@@ -41,7 +43,11 @@ type OutMsg
 
 
 type Msg
-    = UpdateOldPassword String
+    = ShowUserName (Result Http.Error String)
+    | UpdateUserName String
+    | ChangeUserName
+    | ResultChangeUserName (Result Http.Error ())
+    | UpdateOldPassword String
     | UpdatedNewPassword1 String
     | UpdatedNewPassword2 String
     | ChangePassword
@@ -51,6 +57,50 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg, OutMsg )
 update msg model =
     case msg of
+        ShowUserName result ->
+            case result of
+                Ok userName ->
+                    ( { model | userName = userName, sendAbleUserName = False }
+                    , Cmd.none
+                    , NoSignal
+                    )
+
+                Err _ ->
+                    ( model
+                    , Cmd.none
+                    , NoSignal
+                    )
+
+        UpdateUserName userName ->
+            let
+                sendAble =
+                    userName /= ""
+            in
+            ( { model | userName = userName, sendAbleUserName = sendAble }
+            , Cmd.none
+            , NoSignal
+            )
+
+        ChangeUserName ->
+            ( model
+            , changeUser model
+            , NoSignal
+            )
+
+        ResultChangeUserName result ->
+            case result of
+                Ok _ ->
+                    ( model
+                    , Cmd.none
+                    , ShowMessage <| Notification Success "User Name was changed!!"
+                    )
+
+                Err _ ->
+                    ( model
+                    , Cmd.none
+                    , ShowMessage <| Notification Error "Please Change User Name!"
+                    )
+
         UpdateOldPassword oldPass ->
             ( { model | currentPassword = Just oldPass }
             , Cmd.none
@@ -129,6 +179,13 @@ update msg model =
 view : Model -> Html Msg
 view model =
     let
+        userNameButtonConfig =
+            if model.sendAbleUserName then
+                [ class "siimple-btn", class "siimple-btn--dark", onClick ChangeUserName ]
+
+            else
+                [ class "siimple-btn", class "siimple-btn--dark", class "siimple-btn--disabled" ]
+
         passwordButtonConfig =
             if model.sendAblePassword then
                 [ class "siimple-btn", class "siimple-btn--dark", onClick ChangePassword ]
@@ -138,6 +195,28 @@ view model =
     in
     div []
         [ div
+            [ class "siimple-card" ]
+            [ div [ class "siimple-card-header" ] [ text "Account" ]
+            , div [ class "siimple-card-body" ]
+                [ div [ class "siimple-form" ]
+                    [ label [ class "siimple-label" ] [ text "user name" ]
+                    , input
+                        [ class "siimple-input"
+                        , class "siimple-input--fluid"
+                        , placeholder "User Name"
+                        , style "margin-bottom" "20px"
+                        , onInput UpdateUserName
+                        , value model.userName
+                        ]
+                        []
+                    , div
+                        userNameButtonConfig
+                        [ text "Update" ]
+                    , br [] []
+                    ]
+                ]
+            ]
+        , div
             [ class "siimple-card" ]
             [ div [ class "siimple-card-header" ] [ text "Password" ]
             , div [ class "siimple-card-body" ]
@@ -184,6 +263,60 @@ view model =
 
 
 -- HTTP
+
+
+userUrl : String
+userUrl =
+    UrlBuilder.crossOrigin "http://localhost:8080"
+        [ "api", "user" ]
+        []
+
+
+userDecorder : Decode.Decoder String
+userDecorder =
+    Decode.field "id" Decode.string
+
+
+fetchUser : String -> Cmd Msg
+fetchUser token =
+    Http.send ShowUserName (fetchUserRequest userUrl token)
+
+
+fetchUserRequest : String -> String -> Http.Request String
+fetchUserRequest url token =
+    Http.request
+        { method = "GET"
+        , headers =
+            [ Http.header "X-Requested-With" "XMLHttpRequest"
+            , Http.header "Authorization" ("token " ++ token)
+            ]
+        , url = url
+        , body = Http.emptyBody
+        , expect = Http.expectJson userDecorder
+        , timeout = Nothing
+        , withCredentials = False
+        }
+
+
+changeUser : Model -> Cmd Msg
+changeUser model =
+    Http.send ResultChangeUserName (changeUserRequest userUrl model)
+
+
+changeUserRequest : String -> Model -> Http.Request ()
+changeUserRequest url model =
+    Http.request
+        { method = "PUT"
+        , headers =
+            [ Http.header "X-Requested-With" "XMLHttpRequest"
+            , Http.header "Authorization" ("token " ++ model.token)
+            ]
+        , url = url
+        , body = Http.stringBody "application/x-www-form-urlencoded" ("id=" ++ model.userName)
+        , expect = Http.expectStringResponse (\_ -> Ok ())
+        , timeout = Nothing
+        , withCredentials = False
+        }
 
 
 passwordUrl : String
