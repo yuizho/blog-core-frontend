@@ -12,8 +12,10 @@ import Notification exposing (..)
 import Page.Article as Article
 import Page.ArticleList as ArticleList
 import Page.Settings as Settings
+import Process
 import Session exposing (Credential, Session(..))
 import Task
+import Time
 import Tuple
 import Url
 import Url.Builder as UrlBuilder
@@ -159,7 +161,7 @@ processArticleSignal : Article.OutMsg -> Model -> ( Model, Cmd Msg )
 processArticleSignal signal model =
     case signal of
         Article.ShowMessage notification ->
-            ( { model | notification = Just notification }, Cmd.none )
+            ( { model | notification = Just notification }, closeMessageAsync )
 
         Article.NoSignal ->
             ( model, Cmd.none )
@@ -169,7 +171,7 @@ processSettingsSignal : Settings.OutMsg -> Model -> ( Model, Cmd Msg )
 processSettingsSignal signal model =
     case signal of
         Settings.ShowMessage notification ->
-            ( { model | notification = Just notification }, Cmd.none )
+            ( { model | notification = Just notification }, closeMessageAsync )
 
         Settings.RemoveMessage ->
             ( { model | notification = Nothing }, Cmd.none )
@@ -194,6 +196,7 @@ type Msg
     | ArticleUpdate Article.Msg
     | SettingsUpdate Settings.Msg
     | CloseMessage
+    | CloseMessageAsync ()
     | ShowMessage Notification
     | LinkClicked Browser.UrlRequest
     | UrlChanged Url.Url
@@ -340,9 +343,14 @@ update msg model =
                     ( model, Cmd.none )
 
         ShowMessage notification ->
-            ( { model | notification = Just notification }, Cmd.none )
+            ( { model | notification = Just notification }, closeMessageAsync )
 
         CloseMessage ->
+            ( { model | notification = Nothing }
+            , Cmd.none
+            )
+
+        CloseMessageAsync _ ->
             ( { model | notification = Nothing }
             , Cmd.none
             )
@@ -366,6 +374,16 @@ update msg model =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     portResLocalStorage ReceiveSessionStatus
+
+
+sleepTask : Task.Task Never ()
+sleepTask =
+    Process.sleep 3000 |> Task.map (\_ -> ())
+
+
+closeMessageAsync : Cmd Msg
+closeMessageAsync =
+    Task.perform CloseMessageAsync sleepTask
 
 
 
@@ -481,7 +499,15 @@ viewNotification notification =
                 Error ->
                     "siimple-alert--error"
     in
-    div [ class "siimple-alert", class messageTypeClass ]
+    div
+        [ class "siimple-alert"
+        , class messageTypeClass
+        , style "height" "40px"
+        , style "position" "fixed"
+        , style "top" "0"
+        , style "z-index" "999"
+        , onClick CloseMessage
+        ]
         [ div [ class "siimple-alert-close", onClick CloseMessage ] []
         , text notification.message
         ]
