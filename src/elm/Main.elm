@@ -13,6 +13,7 @@ import Page.Article as Article
 import Page.ArticleList as ArticleList
 import Page.Settings as Settings
 import Process
+import RemoteData
 import Session exposing (Credential, Session(..))
 import Task
 import Time
@@ -69,7 +70,7 @@ type alias LoginData =
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url key =
-    ( Model url key (Guest Nothing) Nothing <| ArticleListPage (ArticleList.Model [])
+    ( Model url key (Guest Nothing) Nothing <| ArticleListPage (ArticleList.Model RemoteData.NotAsked)
     , portGetLocalStorage "loggein_token"
     )
 
@@ -97,7 +98,7 @@ routeUrl url model =
             result
 
         Nothing ->
-            ( { model | page = ArticleListPage (ArticleList.Model []) }
+            ( { model | page = ArticleListPage (ArticleList.Model RemoteData.NotAsked) }
             , Cmd.none
             )
 
