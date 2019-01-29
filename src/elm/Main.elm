@@ -418,14 +418,21 @@ view model =
             baseHtml model title <|
                 div []
                     [ div [ class "siimple-field" ]
-                        [ div [] [ text "user name" ]
-                        , input [ class "siimple-input", onInput ChangeUserName ] []
+                        [ label [ class "siimple-label" ] [ text "user name" ]
+                        , input [ class "siimple-input", class "siimple-input--fluid", onInput ChangeUserName ] []
                         ]
                     , div [ class "siimple-field" ]
-                        [ div [] [ text "password" ]
-                        , input [ class "siimple-input", type_ "password", onInput ChangePassword ] []
+                        [ label [ class "siimple-label" ] [ text "password" ]
+                        , input [ class "siimple-input", class "siimple-input--fluid", type_ "password", onInput ChangePassword ] []
                         ]
-                    , div [ class "siimple-field" ] [ button [ class "siimple-btn", onClick Login ] [ text "login" ] ]
+                    , div [ class "siimple-field" ]
+                        [ div
+                            [ class "siimple-btn"
+                            , class "siimple-btn--dark"
+                            , onClick Login
+                            ]
+                            [ text "login" ]
+                        ]
                     ]
 
         Loggedin token ->
