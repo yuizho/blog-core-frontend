@@ -366,6 +366,7 @@ update msg model =
 
 errorHandling : Http.Error -> Cmd Msg
 errorHandling err =
+    -- TODO: to be common util
     let
         msg =
             case err of
@@ -373,8 +374,12 @@ errorHandling err =
                     "Time out"
 
                 Http.BadStatus resp ->
-                    -- TODO: parse json String to only show message
-                    resp.body
+                    case Decode.decodeString (Decode.field "message" Decode.string) resp.body of
+                        Ok message ->
+                            message
+
+                        Err _ ->
+                            "Unexpected Error"
 
                 _ ->
                     "Unexpected Error"

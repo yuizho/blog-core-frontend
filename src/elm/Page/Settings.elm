@@ -65,10 +65,10 @@ update msg model =
                     , NoSignal
                     )
 
-                Err _ ->
+                Err err ->
                     ( model
                     , Cmd.none
-                    , NoSignal
+                    , ShowMessage <| Notification Error <| getErrorMessage err
                     )
 
         UpdateUserName userName ->
@@ -95,10 +95,10 @@ update msg model =
                     , ShowMessage <| Notification Success "User Name was changed!!"
                     )
 
-                Err _ ->
+                Err err ->
                     ( model
                     , Cmd.none
-                    , ShowMessage <| Notification Error "Please Change User Name!"
+                    , ShowMessage <| Notification Error <| getErrorMessage err
                     )
 
         UpdateOldPassword oldPass ->
@@ -165,11 +165,30 @@ update msg model =
                     , ShowMessage <| Notification Success "Password was changed!!"
                     )
 
-                Err _ ->
+                Err err ->
                     ( model
                     , Cmd.none
-                    , ShowMessage <| Notification Error "Current Password is wrong."
+                    , ShowMessage <| Notification Error <| getErrorMessage err
                     )
+
+
+getErrorMessage : Http.Error -> String
+getErrorMessage err =
+    -- TODO: to be common util
+    case err of
+        Http.Timeout ->
+            "Time out"
+
+        Http.BadStatus resp ->
+            case Decode.decodeString (Decode.field "message" Decode.string) resp.body of
+                Ok message ->
+                    message
+
+                Err _ ->
+                    "Unexpected Error"
+
+        _ ->
+            "Unexpected Error"
 
 
 

@@ -99,10 +99,10 @@ update msg model =
                     , NoSignal
                     )
 
-                Err _ ->
+                Err err ->
                     ( model
                     , Cmd.none
-                    , ShowMessage <| Notification Error "Unexpected Error was occurred......"
+                    , ShowMessage <| Notification Error <| getErrorMessage err
                     )
 
         ShowContentAfterSubmit result ->
@@ -113,10 +113,10 @@ update msg model =
                     , ShowMessage <| Notification Success "Succeeded!!"
                     )
 
-                Err _ ->
+                Err err ->
                     ( model
                     , Cmd.none
-                    , ShowMessage <| Notification Error "Unexpected Error was occurred......"
+                    , ShowMessage <| Notification Error <| getErrorMessage err
                     )
 
         ChangeTitle modifiedTitle ->
@@ -173,11 +173,30 @@ update msg model =
                     , NoSignal
                     )
 
-                Err _ ->
+                Err err ->
                     ( model
                     , Cmd.none
-                    , ShowMessage <| Notification Error "Unexpected Error was occurred......"
+                    , ShowMessage <| Notification Error <| getErrorMessage err
                     )
+
+
+getErrorMessage : Http.Error -> String
+getErrorMessage err =
+    -- TODO: to be common util
+    case err of
+        Http.Timeout ->
+            "Time out"
+
+        Http.BadStatus resp ->
+            case Decode.decodeString (Decode.field "message" Decode.string) resp.body of
+                Ok message ->
+                    message
+
+                Err _ ->
+                    "Unexpected Error"
+
+        _ ->
+            "Unexpected Error"
 
 
 
