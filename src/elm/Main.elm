@@ -12,8 +12,11 @@ import Notification exposing (..)
 import Page.Article as Article
 import Page.ArticleList as ArticleList
 import Page.Settings as Settings
+import Process
+import RemoteData
 import Session exposing (Credential, Session(..))
 import Task
+import Time
 import Tuple
 import Url
 import Url.Builder as UrlBuilder
@@ -67,7 +70,7 @@ type alias LoginData =
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url key =
-    ( Model url key (Guest Nothing) Nothing <| ArticleListPage (ArticleList.Model [])
+    ( Model url key (Guest Nothing) Nothing <| ArticleListPage (ArticleList.Model RemoteData.NotAsked)
     , portGetLocalStorage "loggein_token"
     )
 
@@ -95,7 +98,7 @@ routeUrl url model =
             result
 
         Nothing ->
-            ( { model | page = ArticleListPage (ArticleList.Model []) }
+            ( { model | page = ArticleListPage (ArticleList.Model RemoteData.NotAsked) }
             , Cmd.none
             )
 
@@ -159,7 +162,7 @@ processArticleSignal : Article.OutMsg -> Model -> ( Model, Cmd Msg )
 processArticleSignal signal model =
     case signal of
         Article.ShowMessage notification ->
-            ( { model | notification = Just notification }, Cmd.none )
+            ( { model | notification = Just notification }, closeMessageAsync )
 
         Article.NoSignal ->
             ( model, Cmd.none )
@@ -169,7 +172,7 @@ processSettingsSignal : Settings.OutMsg -> Model -> ( Model, Cmd Msg )
 processSettingsSignal signal model =
     case signal of
         Settings.ShowMessage notification ->
-            ( { model | notification = Just notification }, Cmd.none )
+            ( { model | notification = Just notification }, closeMessageAsync )
 
         Settings.RemoveMessage ->
             ( { model | notification = Nothing }, Cmd.none )
@@ -194,6 +197,7 @@ type Msg
     | ArticleUpdate Article.Msg
     | SettingsUpdate Settings.Msg
     | CloseMessage
+    | CloseMessageAsync ()
     | ShowMessage Notification
     | LinkClicked Browser.UrlRequest
     | UrlChanged Url.Url
@@ -266,16 +270,12 @@ update msg model =
                     , portSetLocalStorage ( "loggein_token", login.token )
                     )
 
-                Err _ ->
-                    -- TOOD: Error handling
-                    ( model
-                    , Cmd.none
-                    )
+                Err err ->
+                    ( model, errorHandling err )
 
         Logout ->
             case model.session of
                 Loggedin token ->
-                    -- TODO: postLogoutとportRemoveLocalStrageはTaskで同時にやったほうがよさげ
                     ( model, Cmd.batch [ portRemoveLocalStorage "loggein_token", postLogout token ] )
 
                 Guest _ ->
@@ -288,8 +288,8 @@ update msg model =
                     , Cmd.none
                     )
 
-                Err _ ->
-                    ( model, Cmd.none )
+                Err err ->
+                    ( model, errorHandling err )
 
         ArticleListUpdate subMsg ->
             case model.page of
@@ -340,9 +340,14 @@ update msg model =
                     ( model, Cmd.none )
 
         ShowMessage notification ->
-            ( { model | notification = Just notification }, Cmd.none )
+            ( { model | notification = Just notification }, closeMessageAsync )
 
         CloseMessage ->
+            ( { model | notification = Nothing }
+            , Cmd.none
+            )
+
+        CloseMessageAsync _ ->
             ( { model | notification = Nothing }
             , Cmd.none
             )
@@ -359,6 +364,29 @@ update msg model =
             routeUrl url model
 
 
+errorHandling : Http.Error -> Cmd Msg
+errorHandling err =
+    -- TODO: to be common util
+    let
+        msg =
+            case err of
+                Http.Timeout ->
+                    "Time out"
+
+                Http.BadStatus resp ->
+                    case Decode.decodeString (Decode.field "message" Decode.string) resp.body of
+                        Ok message ->
+                            message
+
+                        Err _ ->
+                            "Unexpected Error"
+
+                _ ->
+                    "Unexpected Error"
+    in
+    Task.perform ShowMessage (Task.succeed <| Notification Error msg)
+
+
 
 -- SUBSCRIPTIONS
 
@@ -366,6 +394,16 @@ update msg model =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     portResLocalStorage ReceiveSessionStatus
+
+
+sleepTask : Task.Task Never ()
+sleepTask =
+    Process.sleep 3000 |> Task.map (\_ -> ())
+
+
+closeMessageAsync : Cmd Msg
+closeMessageAsync =
+    Task.perform CloseMessageAsync sleepTask
 
 
 
@@ -385,14 +423,21 @@ view model =
             baseHtml model title <|
                 div []
                     [ div [ class "siimple-field" ]
-                        [ div [] [ text "user name" ]
-                        , input [ class "siimple-input", onInput ChangeUserName ] []
+                        [ label [ class "siimple-label" ] [ text "user name" ]
+                        , input [ class "siimple-input", class "siimple-input--fluid", onInput ChangeUserName ] []
                         ]
                     , div [ class "siimple-field" ]
-                        [ div [] [ text "password" ]
-                        , input [ class "siimple-input", type_ "password", onInput ChangePassword ] []
+                        [ label [ class "siimple-label" ] [ text "password" ]
+                        , input [ class "siimple-input", class "siimple-input--fluid", type_ "password", onInput ChangePassword ] []
                         ]
-                    , div [ class "siimple-field" ] [ button [ class "siimple-btn", onClick Login ] [ text "login" ] ]
+                    , div [ class "siimple-field" ]
+                        [ div
+                            [ class "siimple-btn"
+                            , class "siimple-btn--dark"
+                            , onClick Login
+                            ]
+                            [ text "login" ]
+                        ]
                     ]
 
         Loggedin token ->
@@ -481,7 +526,15 @@ viewNotification notification =
                 Error ->
                     "siimple-alert--error"
     in
-    div [ class "siimple-alert", class messageTypeClass ]
+    div
+        [ class "siimple-alert"
+        , class messageTypeClass
+        , style "height" "40px"
+        , style "position" "fixed"
+        , style "top" "0"
+        , style "z-index" "999"
+        , onClick CloseMessage
+        ]
         [ div [ class "siimple-alert-close", onClick CloseMessage ] []
         , text notification.message
         ]
