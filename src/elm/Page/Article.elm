@@ -25,8 +25,6 @@ type alias Model =
     , submitAble : Bool
     , token : Session.LoggedinToken
     , editMode : EditMode
-
-    -- TOOD: ここでLoadding状態とかもたせればよさげ。おそらく、Modelのtypeも分けるとなおいいかな。
     }
 
 

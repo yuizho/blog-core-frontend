@@ -15,8 +15,6 @@ import Url.Builder as UrlBuilder
 
 type alias Model =
     { articles : WebData (List Article)
-
-    -- TOOD: ここでLoadking状態とかもたせればよさげ。
     }
 
 
