@@ -22,6 +22,7 @@ type alias Model =
     , articlePageMode : ArticlePageMode
     , articleInfo : ArticleInfo
     , content : String
+    , submitAble : Bool
     , token : Session.LoggedinToken
     , editMode : EditMode
 
@@ -50,12 +51,12 @@ init : Nav.Key -> ArticlePageMode -> Session.LoggedinToken -> ( Model, Cmd Msg )
 init key articlePageMode token =
     case articlePageMode of
         Create ->
-            ( Model key articlePageMode (ArticleInfo "" 0 "") "" token Editor
+            ( Model key articlePageMode (ArticleInfo "" 0 "") "" False token Editor
             , Cmd.none
             )
 
         Modify id ->
-            ( Model key articlePageMode (ArticleInfo "" 0 "") "" token Editor
+            ( Model key articlePageMode (ArticleInfo "" 0 "") "" False token Editor
             , fetchContent id token
             )
 
@@ -92,6 +93,7 @@ update msg model =
                         | articleInfo = data.articleInfo
                         , content = data.content
                         , articlePageMode = Modify (String.fromInt <| data.articleInfo.id)
+                        , submitAble = True
                       }
                     , Cmd.none
                     , NoSignal
@@ -121,9 +123,13 @@ update msg model =
             let
                 articleInfo =
                     model.articleInfo
+
+                submitAble =
+                    modifiedTitle /= ""
             in
             ( { model
-                | articleInfo = { articleInfo | title = modifiedTitle }
+                | submitAble = submitAble
+                , articleInfo = { articleInfo | title = modifiedTitle }
               }
             , Cmd.none
             , NoSignal
@@ -181,24 +187,43 @@ update msg model =
 view : Model -> Html Msg
 view model =
     let
+        submitButtonConfigs =
+            if model.submitAble then
+                [ class "siimple-btn--enabled", onClick ClickedSubmit ]
+
+            else
+                [ class "siimple-btn--disabled" ]
+
         pageModeConfig =
             case model.articlePageMode of
                 Create ->
-                    [ div [ class "siimple-form" ] [ div [ class "siimple-btn", class "siimple-btn--grey", onClick ClickedSubmit ] [ text "create" ] ]
+                    [ div [ class "siimple-form" ]
+                        [ div
+                            ([ class "siimple-btn"
+                             , class "siimple-btn--dark"
+                             , class "siimple--mt-4"
+                             ]
+                                ++ submitButtonConfigs
+                            )
+                            [ text "create" ]
+                        ]
                     ]
 
                 Modify string ->
                     [ div [ class "siimple-form" ]
                         [ div
-                            [ class "siimple-btn"
-                            , class "siimple-btn--grey"
-                            , style "margin-right" "5px"
-                            , onClick ClickedSubmit
-                            ]
+                            ([ class "siimple-btn"
+                             , class "siimple-btn--dark"
+                             , class "siimple--mr-1"
+                             , class "siimple--mt-4"
+                             ]
+                                ++ submitButtonConfigs
+                            )
                             [ text "update" ]
                         , div
                             [ class "siimple-btn"
-                            , class "siimple-btn--grey"
+                            , class "siimple-btn--dark"
+                            , class "siimple--mt-4"
                             , onClick ClickedDelete
                             ]
                             [ text "delete" ]
@@ -223,8 +248,7 @@ view model =
                     }
     in
     div []
-        [ div [] pageModeConfig
-        , div [ class "siimple-form" ]
+        [ div [ class "siimple-form" ]
             [ label [ class "siimple-label" ] [ text "Title" ]
             , input
                 [ class "siimple-input"
@@ -254,6 +278,7 @@ view model =
                     [ text model.content ]
                 ]
             , div [ style "display" editModeConfig.previewDisplay ] [ toHtmlWith options [] model.content ]
+            , div [] pageModeConfig
             ]
         ]
 
