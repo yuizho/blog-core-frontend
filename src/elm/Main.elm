@@ -270,16 +270,12 @@ update msg model =
                     , portSetLocalStorage ( "loggein_token", login.token )
                     )
 
-                Err _ ->
-                    -- TOOD: Error handling
-                    ( model
-                    , Cmd.none
-                    )
+                Err err ->
+                    ( model, errorHandling err )
 
         Logout ->
             case model.session of
                 Loggedin token ->
-                    -- TODO: postLogoutとportRemoveLocalStrageはTaskで同時にやったほうがよさげ
                     ( model, Cmd.batch [ portRemoveLocalStorage "loggein_token", postLogout token ] )
 
                 Guest _ ->
@@ -292,8 +288,8 @@ update msg model =
                     , Cmd.none
                     )
 
-                Err _ ->
-                    ( model, Cmd.none )
+                Err err ->
+                    ( model, errorHandling err )
 
         ArticleListUpdate subMsg ->
             case model.page of
@@ -366,6 +362,24 @@ update msg model =
 
         UrlChanged url ->
             routeUrl url model
+
+
+errorHandling : Http.Error -> Cmd Msg
+errorHandling err =
+    let
+        msg =
+            case err of
+                Http.Timeout ->
+                    "Time out"
+
+                Http.BadStatus resp ->
+                    -- TODO: parse json String to only show message
+                    resp.body
+
+                _ ->
+                    "Unexpected Error"
+    in
+    Task.perform ShowMessage (Task.succeed <| Notification Error msg)
 
 
 
