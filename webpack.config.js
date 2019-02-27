@@ -132,7 +132,8 @@ if (MODE === "production") {
     module.exports = merge(common, {
         plugins: [
             // Minify elm code
-            new elmMinify.WebpackPlugin(),
+            // TODO: when this plugin is enabled, build is failed
+            //new elmMinify.WebpackPlugin(),
             // Delete everything from /dist directory and report to user
             new CleanWebpackPlugin(["dist"], {
                 root: __dirname,

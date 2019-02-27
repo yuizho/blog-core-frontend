@@ -1,6 +1,6 @@
 {
     "author": "yuizho",
-    "name": "blog-client",
+    "name": "blog-frontend",
     "version": "1.0.0",
     "main": "index.js",
     "scripts": {
@@ -39,7 +39,8 @@
         "natives": "^1.1.6"
     },
     "dependencies": {
-        "purecss": "^1.0.0"
+        "purecss": "^1.0.0",
+        "siimple": "^3.3.0"
     },
     "prettier": {
         "tabWidth": 4
