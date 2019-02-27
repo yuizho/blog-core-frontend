@@ -111,6 +111,12 @@ if (MODE === "development") {
             stats: "errors-only",
             contentBase: path.join(__dirname, "src/assets"),
             historyApiFallback: true,
+            // add proxy configuration to avoid cross origin restriction
+            proxy: {
+                '/api': {
+                    target: 'http://localhost:8080'
+                }
+            },
             // feel free to delete this section if you don't need anything like this
             before(app) {
                 // on port 3000

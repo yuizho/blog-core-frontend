@@ -113,9 +113,7 @@ fetchArticles =
 
 articlesUrl : String
 articlesUrl =
-    UrlBuilder.crossOrigin "http://localhost:8080"
-        [ "api", "articles" ]
-        []
+    UrlBuilder.absolute [ "api", "articles" ] []
 
 
 articlesDecorder : Decode.Decoder (List Article)

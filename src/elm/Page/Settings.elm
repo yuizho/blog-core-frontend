@@ -286,9 +286,7 @@ view model =
 
 userUrl : String
 userUrl =
-    UrlBuilder.crossOrigin "http://localhost:8080"
-        [ "api", "user" ]
-        []
+    UrlBuilder.absolute [ "api", "user" ] []
 
 
 userDecorder : Decode.Decoder String
@@ -340,9 +338,7 @@ changeUserRequest url model =
 
 passwordUrl : String
 passwordUrl =
-    UrlBuilder.crossOrigin "http://localhost:8080"
-        [ "api", "user", "password" ]
-        []
+    UrlBuilder.absolute [ "api", "user", "password" ] []
 
 
 changePassword : Model -> Cmd Msg

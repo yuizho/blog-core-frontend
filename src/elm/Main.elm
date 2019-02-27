@@ -569,9 +569,7 @@ loginRequest url body =
 
 loginUrl : String
 loginUrl =
-    UrlBuilder.crossOrigin "http://localhost:8080"
-        [ "api", "user", "login" ]
-        []
+    UrlBuilder.absolute [ "api", "user", "login" ] []
 
 
 loginDecorder : Decode.Decoder LoginData
@@ -603,6 +601,4 @@ logoutRequest url token =
 
 logoutUrl : String
 logoutUrl =
-    UrlBuilder.crossOrigin "http://localhost:8080"
-        [ "api", "user", "logout" ]
-        []
+    UrlBuilder.absolute [ "api", "user", "logout" ] []

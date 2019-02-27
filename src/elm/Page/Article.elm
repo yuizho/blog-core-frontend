@@ -326,23 +326,17 @@ fetchContent id token =
 
 contentUrl : String -> String
 contentUrl id =
-    UrlBuilder.crossOrigin "http://localhost:8080"
-        [ "api", "articles", id, "content" ]
-        []
+    UrlBuilder.absolute [ "api", "articles", id, "content" ] []
 
 
 articleUrl : String
 articleUrl =
-    UrlBuilder.crossOrigin "http://localhost:8080"
-        [ "api", "articles" ]
-        []
+    UrlBuilder.absolute [ "api", "articles" ] []
 
 
 createdArticleUrl : String -> String
 createdArticleUrl id =
-    UrlBuilder.crossOrigin "http://localhost:8080"
-        [ "api", "articles", id ]
-        []
+    UrlBuilder.absolute [ "api", "articles", id ] []
 
 
 articleDecorder : Decode.Decoder ArticleInfo
