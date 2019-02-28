@@ -4,11 +4,13 @@ import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
+import Html.Keyed as Keyed
 import Http
 import Json.Decode as Decode
 import Markdown exposing (Options, defaultOptions, toHtmlWith)
 import Notification exposing (MessageType(..), Notification)
 import Session
+import Set exposing (..)
 import Task
 import Url.Builder as UrlBuilder
 
@@ -25,6 +27,7 @@ type alias Model =
     , submitAble : Bool
     , token : Session.LoggedinToken
     , editMode : EditMode
+    , enteredTag : String
     }
 
 
@@ -42,6 +45,7 @@ type alias ArticleInfo =
     { title : String
     , id : Int
     , createdAt : String
+    , tags : List String
     }
 
 
@@ -49,12 +53,12 @@ init : Nav.Key -> ArticlePageMode -> Session.LoggedinToken -> ( Model, Cmd Msg )
 init key articlePageMode token =
     case articlePageMode of
         Create ->
-            ( Model key articlePageMode (ArticleInfo "" 0 "") "" False token Editor
+            ( Model key articlePageMode (ArticleInfo "" 0 "" []) "" False token Editor ""
             , Cmd.none
             )
 
         Modify id ->
-            ( Model key articlePageMode (ArticleInfo "" 0 "") "" False token Editor
+            ( Model key articlePageMode (ArticleInfo "" 0 "" []) "" False token Editor ""
             , fetchContent id token
             )
 
@@ -71,6 +75,8 @@ type OutMsg
 type Msg
     = ShowContent (Result Http.Error { articleInfo : ArticleInfo, content : String })
     | ShowContentAfterSubmit (Result Http.Error ArticleInfo)
+    | AddTag String
+    | ClickTagClose Int
     | ChangeTitle String
     | ChangeContent String
     | ClickedEditor
@@ -116,6 +122,42 @@ update msg model =
                     , Cmd.none
                     , ShowMessage <| Notification Error <| getErrorMessage err
                     )
+
+        AddTag tag ->
+            let
+                articleInfo =
+                    model.articleInfo
+
+                addedTags =
+                    case tag of
+                        "" ->
+                            model.articleInfo.tags
+
+                        _ ->
+                            (model.articleInfo.tags ++ [ tag ])
+                                |> Set.fromList
+                                |> Set.toList
+            in
+            ( { model | articleInfo = { articleInfo | tags = addedTags }, enteredTag = "" }
+            , Cmd.none
+            , NoSignal
+            )
+
+        ClickTagClose index ->
+            let
+                articleInfo =
+                    model.articleInfo
+
+                currentTags =
+                    model.articleInfo.tags
+
+                modifiedTags =
+                    List.take index currentTags ++ List.drop (index + 1) currentTags
+            in
+            ( { model | articleInfo = { articleInfo | tags = modifiedTags } }
+            , Cmd.none
+            , NoSignal
+            )
 
         ChangeTitle modifiedTitle ->
             let
@@ -276,6 +318,21 @@ view model =
                 ]
                 [ text model.articleInfo.title ]
             ]
+        , div [ class "siimple-form" ]
+            [ label [ class "siimple-label" ] [ text "Tag" ]
+            , input
+                [ class "siimple-input"
+                , class "siimple-input--fluid"
+                , placeholder "additional tag name"
+                , onBlurWithTargetValue AddTag
+                , onEnter AddTag
+                , value model.enteredTag
+                ]
+                [ text model.enteredTag ]
+            , Keyed.node "div"
+                []
+                (List.indexedMap tagElements model.articleInfo.tags)
+            ]
         , div []
             [ div
                 [ class "siimple-tabs"
@@ -298,6 +355,45 @@ view model =
             , div [] pageModeConfig
             ]
         ]
+
+
+onBlurWithTargetValue : (String -> msg) -> Attribute msg
+onBlurWithTargetValue tagger =
+    on "blur" (Decode.map tagger targetValue)
+
+
+onEnter : (String -> msg) -> Attribute msg
+onEnter tagger =
+    let
+        isEnter code =
+            -- 13 is enter key code
+            if code == 13 then
+                Decode.map tagger targetValue
+
+            else
+                Decode.fail "not ENTER"
+    in
+    on "keydown" (Decode.andThen isEnter keyCode)
+
+
+tagElements : Int -> String -> ( String, Html Msg )
+tagElements index tag =
+    ( String.fromInt index
+    , span
+        [ class "siimple-tag"
+        , class "siimple-tag--primary"
+        , class "siimple-tag--rounded"
+        , class "siimple--mt-2"
+        , class "siimple--mr-1"
+        ]
+        [ text tag
+        , div
+            [ class "siimple-close"
+            , onClick (ClickTagClose index)
+            ]
+            []
+        ]
+    )
 
 
 options : Options
@@ -341,10 +437,11 @@ createdArticleUrl id =
 
 articleDecorder : Decode.Decoder ArticleInfo
 articleDecorder =
-    Decode.map3 ArticleInfo
+    Decode.map4 ArticleInfo
         (Decode.field "title" Decode.string)
         (Decode.field "id" Decode.int)
         (Decode.field "added_at" Decode.string)
+        (Decode.field "tag_names" (Decode.list Decode.string))
 
 
 sendArticle : Model -> Cmd Msg
@@ -362,6 +459,9 @@ sendArticleRequest model =
 
                 Modify id ->
                     ( "PUT", createdArticleUrl (String.fromInt model.articleInfo.id) )
+
+        tags =
+            String.join "," model.articleInfo.tags
     in
     Http.request
         { method = method
@@ -370,7 +470,15 @@ sendArticleRequest model =
             , Http.header "Authorization" ("token " ++ model.token)
             ]
         , url = url
-        , body = Http.stringBody "application/x-www-form-urlencoded" ("content=" ++ model.content ++ "&title=" ++ model.articleInfo.title)
+        , body =
+            Http.stringBody "application/x-www-form-urlencoded"
+                ("content="
+                    ++ model.content
+                    ++ "&title="
+                    ++ model.articleInfo.title
+                    ++ "&tags="
+                    ++ tags
+                )
         , expect = Http.expectJson articleDecorder
         , timeout = Nothing
         , withCredentials = False
