@@ -4,6 +4,7 @@ import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
+import Html.Keyed as Keyed
 import Http
 import Json.Decode as Decode
 import Markdown exposing (Options, defaultOptions, toHtmlWith)
@@ -75,6 +76,7 @@ type Msg
     = ShowContent (Result Http.Error { articleInfo : ArticleInfo, content : String })
     | ShowContentAfterSubmit (Result Http.Error ArticleInfo)
     | AddTag String
+    | ClickTagClose Int
     | ChangeTitle String
     | ChangeContent String
     | ClickedEditor
@@ -137,6 +139,22 @@ update msg model =
                                 |> Set.toList
             in
             ( { model | articleInfo = { articleInfo | tags = addedTags }, enteredTag = "" }
+            , Cmd.none
+            , NoSignal
+            )
+
+        ClickTagClose index ->
+            let
+                articleInfo =
+                    model.articleInfo
+
+                currentTags =
+                    model.articleInfo.tags
+
+                modifiedTags =
+                    List.take index currentTags ++ List.drop (index + 1) currentTags
+            in
+            ( { model | articleInfo = { articleInfo | tags = modifiedTags } }
             , Cmd.none
             , NoSignal
             )
@@ -311,8 +329,9 @@ view model =
                 , value model.enteredTag
                 ]
                 [ text model.enteredTag ]
-            , div []
-                (List.map tagElements model.articleInfo.tags)
+            , Keyed.node "div"
+                []
+                (List.indexedMap tagElements model.articleInfo.tags)
             ]
         , div []
             [ div
@@ -357,17 +376,24 @@ onEnter tagger =
     on "keydown" (Decode.andThen isEnter keyCode)
 
 
-tagElements : String -> Html a
-tagElements tag =
-    span
+tagElements : Int -> String -> ( String, Html Msg )
+tagElements index tag =
+    ( String.fromInt index
+    , span
         [ class "siimple-tag"
         , class "siimple-tag--primary"
         , class "siimple-tag--rounded"
         , class "siimple--mt-2"
         , class "siimple--mr-1"
         ]
-        -- TODO: how to remove the element, when close button is clicked
-        [ text tag, div [ class "siimple-close" ] [] ]
+        [ text tag
+        , div
+            [ class "siimple-close"
+            , onClick (ClickTagClose index)
+            ]
+            []
+        ]
+    )
 
 
 options : Options
