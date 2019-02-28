@@ -9,6 +9,7 @@ import Json.Decode as Decode
 import Markdown exposing (Options, defaultOptions, toHtmlWith)
 import Notification exposing (MessageType(..), Notification)
 import Session
+import Set exposing (..)
 import Task
 import Url.Builder as UrlBuilder
 
@@ -42,6 +43,7 @@ type alias ArticleInfo =
     { title : String
     , id : Int
     , createdAt : String
+    , tags : List String
     }
 
 
@@ -49,12 +51,12 @@ init : Nav.Key -> ArticlePageMode -> Session.LoggedinToken -> ( Model, Cmd Msg )
 init key articlePageMode token =
     case articlePageMode of
         Create ->
-            ( Model key articlePageMode (ArticleInfo "" 0 "") "" False token Editor
+            ( Model key articlePageMode (ArticleInfo "" 0 "" []) "" False token Editor
             , Cmd.none
             )
 
         Modify id ->
-            ( Model key articlePageMode (ArticleInfo "" 0 "") "" False token Editor
+            ( Model key articlePageMode (ArticleInfo "" 0 "" []) "" False token Editor
             , fetchContent id token
             )
 
@@ -71,6 +73,7 @@ type OutMsg
 type Msg
     = ShowContent (Result Http.Error { articleInfo : ArticleInfo, content : String })
     | ShowContentAfterSubmit (Result Http.Error ArticleInfo)
+    | AddTag String
     | ChangeTitle String
     | ChangeContent String
     | ClickedEditor
@@ -116,6 +119,26 @@ update msg model =
                     , Cmd.none
                     , ShowMessage <| Notification Error <| getErrorMessage err
                     )
+
+        AddTag tag ->
+            let
+                articleInfo =
+                    model.articleInfo
+
+                addedTags =
+                    case tag of
+                        "" ->
+                            model.articleInfo.tags
+
+                        _ ->
+                            (model.articleInfo.tags ++ [ tag ])
+                                |> Set.fromList
+                                |> Set.toList
+            in
+            ( { model | articleInfo = { articleInfo | tags = addedTags } }
+            , Cmd.none
+            , NoSignal
+            )
 
         ChangeTitle modifiedTitle ->
             let
@@ -276,6 +299,20 @@ view model =
                 ]
                 [ text model.articleInfo.title ]
             ]
+        , div [ class "siimple-form" ]
+            [ input
+                [ class "siimple-input"
+                , class "siimple-input--fluid"
+                , placeholder "additional tag name"
+
+                -- TODO: how to clear this text box, when there events are fired
+                , onBlurWithTargetValue AddTag
+                , onEnter AddTag
+                ]
+                []
+            , div []
+                (List.map tagElements model.articleInfo.tags)
+            ]
         , div []
             [ div
                 [ class "siimple-tabs"
@@ -298,6 +335,38 @@ view model =
             , div [] pageModeConfig
             ]
         ]
+
+
+onBlurWithTargetValue : (String -> msg) -> Attribute msg
+onBlurWithTargetValue tagger =
+    on "blur" (Decode.map tagger targetValue)
+
+
+onEnter : (String -> msg) -> Attribute msg
+onEnter tagger =
+    let
+        isEnter code =
+            -- 13 is enter key code
+            if code == 13 then
+                Decode.map tagger targetValue
+
+            else
+                Decode.fail "not ENTER"
+    in
+    on "keydown" (Decode.andThen isEnter keyCode)
+
+
+tagElements : String -> Html a
+tagElements tag =
+    span
+        [ class "siimple-tag"
+        , class "siimple-tag--primary"
+        , class "siimple-tag--rounded"
+        , class "siimple--mt-2"
+        , class "siimple--mr-1"
+        ]
+        -- TODO: how to remove the element, when close button is clicked
+        [ text tag, div [ class "siimple-close" ] [] ]
 
 
 options : Options
@@ -341,10 +410,11 @@ createdArticleUrl id =
 
 articleDecorder : Decode.Decoder ArticleInfo
 articleDecorder =
-    Decode.map3 ArticleInfo
+    Decode.map4 ArticleInfo
         (Decode.field "title" Decode.string)
         (Decode.field "id" Decode.int)
         (Decode.field "added_at" Decode.string)
+        (Decode.field "tag_names" (Decode.list Decode.string))
 
 
 sendArticle : Model -> Cmd Msg
