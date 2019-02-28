@@ -459,6 +459,9 @@ sendArticleRequest model =
 
                 Modify id ->
                     ( "PUT", createdArticleUrl (String.fromInt model.articleInfo.id) )
+
+        tags =
+            String.join "," model.articleInfo.tags
     in
     Http.request
         { method = method
@@ -467,7 +470,15 @@ sendArticleRequest model =
             , Http.header "Authorization" ("token " ++ model.token)
             ]
         , url = url
-        , body = Http.stringBody "application/x-www-form-urlencoded" ("content=" ++ model.content ++ "&title=" ++ model.articleInfo.title)
+        , body =
+            Http.stringBody "application/x-www-form-urlencoded"
+                ("content="
+                    ++ model.content
+                    ++ "&title="
+                    ++ model.articleInfo.title
+                    ++ "&tags="
+                    ++ tags
+                )
         , expect = Http.expectJson articleDecorder
         , timeout = Nothing
         , withCredentials = False
