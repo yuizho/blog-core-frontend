@@ -26,6 +26,7 @@ type alias Model =
     , submitAble : Bool
     , token : Session.LoggedinToken
     , editMode : EditMode
+    , enteredTag : String
     }
 
 
@@ -51,12 +52,12 @@ init : Nav.Key -> ArticlePageMode -> Session.LoggedinToken -> ( Model, Cmd Msg )
 init key articlePageMode token =
     case articlePageMode of
         Create ->
-            ( Model key articlePageMode (ArticleInfo "" 0 "" []) "" False token Editor
+            ( Model key articlePageMode (ArticleInfo "" 0 "" []) "" False token Editor ""
             , Cmd.none
             )
 
         Modify id ->
-            ( Model key articlePageMode (ArticleInfo "" 0 "" []) "" False token Editor
+            ( Model key articlePageMode (ArticleInfo "" 0 "" []) "" False token Editor ""
             , fetchContent id token
             )
 
@@ -135,7 +136,7 @@ update msg model =
                                 |> Set.fromList
                                 |> Set.toList
             in
-            ( { model | articleInfo = { articleInfo | tags = addedTags } }
+            ( { model | articleInfo = { articleInfo | tags = addedTags }, enteredTag = "" }
             , Cmd.none
             , NoSignal
             )
@@ -300,16 +301,16 @@ view model =
                 [ text model.articleInfo.title ]
             ]
         , div [ class "siimple-form" ]
-            [ input
+            [ label [ class "siimple-label" ] [ text "Tag" ]
+            , input
                 [ class "siimple-input"
                 , class "siimple-input--fluid"
                 , placeholder "additional tag name"
-
-                -- TODO: how to clear this text box, when there events are fired
                 , onBlurWithTargetValue AddTag
                 , onEnter AddTag
+                , value model.enteredTag
                 ]
-                []
+                [ text model.enteredTag ]
             , div []
                 (List.map tagElements model.articleInfo.tags)
             ]
