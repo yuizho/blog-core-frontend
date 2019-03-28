@@ -83,15 +83,13 @@ view model =
                 Success articles ->
                     List.map viewArticle articles
     in
-    div [ class "siimple-grid-row" ] contents
+    div [ class "siimple-content--extra-small" ] contents
 
 
 viewArticle : Article -> Html msg
 viewArticle article =
     div
-        [ class "siimple-grid-col"
-        , class "siimple-grid-col--9"
-        ]
+        [ class "siimple--mb-4" ]
         [ a
             [ class "siimple-link"
             , class "siimple--color-dark"
